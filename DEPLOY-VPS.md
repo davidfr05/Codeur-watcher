@@ -3,7 +3,7 @@
 Objectif : faire tourner le script en permanence sur ton VPS OVH toujours allumé,
 avec le mode `--watch` (vérification toutes les 90 s). Cadence fiable, ~4 €/mois.
 
-Particularité OVH : on ne se connecte PAS en `root`, mais avec l'utilisateur **`ubuntu`**,
+Particularité OVH : on ne se connecte PAS en `root`, mais avec l'utilisateur **`administrator`**,
 et on utilise `sudo` pour les installations.
 
 ---
@@ -12,7 +12,7 @@ et on utilise `sudo` pour les installations.
 
 Après la mise en service, OVH t'envoie un **email de livraison** contenant :
 - l'**adresse IP** de ton VPS,
-- le **nom d'utilisateur** (pour Ubuntu : `ubuntu`),
+- le **nom d'utilisateur** (pour Ubuntu : `administrator`),
 - un **lien sécurisé** vers ton **mot de passe temporaire**.
 
 Regarde ta boîte mail (et les spams). Note l'IP et récupère le mot de passe via le lien.
@@ -24,7 +24,7 @@ Regarde ta boîte mail (et les spams). Note l'IP et récupère le mot de passe v
 Depuis ton terminal (Windows : PowerShell) :
 
 ```bash
-ssh ubuntu@ADRESSE_IP
+ssh administrator@ADRESSE_IP
 ```
 
 Colle le mot de passe temporaire. OVH va t'obliger à en choisir un **nouveau** :
@@ -32,7 +32,7 @@ il redemande l'ancien, puis le nouveau (2 fois). La session se ferme ensuite
 automatiquement — c'est normal. Reconnecte-toi avec ton **nouveau** mot de passe :
 
 ```bash
-ssh ubuntu@ADRESSE_IP
+ssh administrator@ADRESSE_IP
 ```
 
 ---
@@ -51,7 +51,7 @@ node -v   # doit afficher v20.x
 ## 4. Récupérer le code (dépôt public)
 
 ```bash
-cd /home/ubuntu
+cd /home/administrator
 git clone https://github.com/davidfr05/Codeur-watcher.git codeur-watcher
 cd codeur-watcher
 npm install
@@ -129,13 +129,12 @@ Sur GitHub : onglet **Actions** → "Codeur Watcher" → bouton **"..."** (haut 
 
 - Redémarrer après une modif : `sudo systemctl restart codeur-watcher`
 - Arrêter : `sudo systemctl stop codeur-watcher`
-- Mettre à jour le code : `cd /home/ubuntu/codeur-watcher && git pull && npm install && sudo systemctl restart codeur-watcher`
+- Mettre à jour le code : `cd /home/administrator/codeur-watcher && git pull && npm install && sudo systemctl restart codeur-watcher`
 - Changer la fréquence : `nano config.js` → `intervalleSecondes` (défaut 90), puis `sudo systemctl restart codeur-watcher`
 
 ---
 
 ## En cas de souci
 
-- `ssh ubuntu@IP` refuse le mot de passe → utilise bien le NOUVEAU mot de passe (après le changement forcé), et l'utilisateur `ubuntu` (pas `root`).
-- Tu as perdu le mot de passe → réinitialise-le depuis l'espace client OVH (Manager → ton VPS).
-- Le service ne démarre pas → `sudo systemctl status codeur-watcher` et `journalctl -u codeur-watcher -n 50` pour voir l'erreur.
+- `ssh administrator@IP` refuse le mot de passe → utilise bien le NOUVEAU mot de passe (après le changement forcé), et l'utilisateur `administrator` (pas `root`).
+- Tu as perdu le mot de passe → réinitialise-le depuis l'espace client OVH (Manager → ton
