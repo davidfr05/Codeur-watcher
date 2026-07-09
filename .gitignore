@@ -1,3 +1,4 @@
 node_modules/
 .env
 watcher.log
+apercu-email.html
