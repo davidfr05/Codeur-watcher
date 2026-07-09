@@ -49,5 +49,8 @@ jobs:
           git config user.name "codeur-watcher-bot"
           git config user.email "bot@users.noreply.github.com"
           git add seen.json || true
-          git commit -m "maj seen.json [skip ci]" || echo "rien à committer"
+          # S'il n'y a rien de nouveau, on s'arrête proprement (pas de push inutile).
+          git commit -m "maj seen.json [skip ci]" || { echo "rien à committer"; exit 0; }
+          # On se resynchronise avec le dépôt avant de pousser (évite les rejets "fetch first").
+          git pull --rebase --autostash origin main || true
           git push || echo "push ignoré"
