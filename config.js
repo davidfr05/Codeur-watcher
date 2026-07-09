@@ -32,7 +32,7 @@ export const reglages = {
   modele: "claude-sonnet-5",
 
   // Intervalle (en secondes) entre deux vérifications en mode --watch (serveur/PC allumé).
-  intervalleSecondes: 90,
+  intervalleSecondes: 120,
 
   // Fichier de mémoire des annonces déjà vues.
   fichierVus: "./seen.json",
