@@ -1,0 +1,20 @@
+{
+  "name": "codeur-watcher",
+  "version": "1.0.0",
+  "description": "Surveille codeur.com, qualifie les nouvelles missions avec Claude et notifie par email les bons plans.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dry": "node index.js --dry",
+    "testmail": "node index.js --test-mail",
+    "watch": "node index.js --watch"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "nodemailer": "^6.9.15",
+    "rss-parser": "^3.13.0"
+  }
+}

@@ -1,0 +1,53 @@
+name: Codeur Watcher
+
+# Fréquence de vérification.
+# IMPORTANT quota GitHub Actions :
+#   - Dépôt PUBLIC  = minutes ILLIMITÉES -> tu peux mettre "*/5 * * * *" (toutes les 5 min).
+#   - Dépôt PRIVÉ   = 2000 min/mois gratuites -> reste vers "0 * * * *" (1x/heure) pour ne pas dépasser.
+# GitHub peut retarder les exécutions planifiées de 5-15 min (normal).
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}   # permet aussi un lancement manuel depuis l'onglet Actions
+
+# Autorise le workflow à réécrire seen.json dans le dépôt.
+permissions:
+  contents: write
+
+# Évite deux exécutions simultanées.
+concurrency:
+  group: codeur-watcher
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Installer les dépendances
+        run: npm ci || npm install
+
+      - name: Lancer la veille
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
+        run: node index.js
+
+      - name: Sauvegarder la mémoire (seen.json)
+        run: |
+          git config user.name "codeur-watcher-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add seen.json || true
+          git commit -m "maj seen.json [skip ci]" || echo "rien à committer"
+          git push || echo "push ignoré"
