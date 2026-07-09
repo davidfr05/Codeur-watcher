@@ -1,0 +1,20 @@
+# Service systemd pour faire tourner Codeur Watcher en continu (VPS OVH).
+# À copier dans /etc/systemd/system/codeur-watcher.service
+# (adapté OVH : utilisateur "ubuntu", dossier /home/ubuntu/codeur-watcher)
+
+[Unit]
+Description=Codeur Watcher - veille codeur.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/codeur-watcher
+ExecStart=/usr/bin/node index.js --watch
+Restart=always
+RestartSec=10
+# Redémarre en cas de crash, et repart automatiquement après un reboot (voir [Install]).
+
+[Install]
+WantedBy=multi-user.target
