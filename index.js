@@ -20,6 +20,7 @@ const DRY = process.argv.includes("--dry");
 const SEED = process.argv.includes("--seed");
 const TESTMAIL = process.argv.includes("--test-mail");
 const WATCH = process.argv.includes("--watch");
+const VERSION = "2.0 — pré-filtre + Haiku(éval) + Sonnet(propo) + format v2";
 const parser = new Parser({ timeout: 20000 });
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -225,7 +226,7 @@ function exemples() {
 
 // ---------- Boucle principale ----------
 async function executerPassage() {
-  console.log(`[${new Date().toISOString()}] Démarrage${DRY ? " (DRY RUN)" : ""}`);
+  console.log(`[${new Date().toISOString()}] Démarrage — version ${VERSION}${DRY ? " (DRY RUN)" : ""}`);
   const vus = chargerVus();
 
   if (TESTMAIL) {
