@@ -87,6 +87,13 @@ export const reglages = {
     "télémarketing", "telemarketing", "prospection commerciale", "téléprospection", "standardiste",
   ],
 
+  // Exclusion basée sur la DESCRIPTION complète (mots "durs" uniquement, jamais ambigus).
+  // Sert de filet de sécurité : si le texte révèle un CMS/techno hors périmètre non visible dans le titre.
+  motsExclusionDescription: [
+    "wordpress", "shopify", "woocommerce", "prestashop", "wix", "webflow", "joomla", "drupal", "magento",
+    "cybersécurité", "cybersecurite", "pentest",
+  ],
+
   // Nombre max d'annonces évaluées par exécution (garde-fou coût/temps).
   maxParRun: 25,
 

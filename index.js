@@ -20,6 +20,7 @@ const DRY = process.argv.includes("--dry");
 const SEED = process.argv.includes("--seed");
 const TESTMAIL = process.argv.includes("--test-mail");
 const WATCH = process.argv.includes("--watch");
+const DEBUG = process.argv.includes("--debug");
 const VERSION = "2.0 — pré-filtre + Haiku(éval) + Sonnet(propo) + format v2";
 const parser = new Parser({ timeout: 20000 });
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -58,10 +59,10 @@ function repererBudget(texte = "") {
   for (const p of patterns) { const m = texte.match(p); if (m) return m[0].replace(/\s+/g, " ").trim(); }
   return null;
 }
-// Pré-filtre gratuit : renvoie le mot-clé bloquant trouvé, ou null.
-function motBloquant(texte = "") {
+// Cherche un mot d'une liste dans un texte (insensible à la casse). Renvoie le mot trouvé ou null.
+function motDansListe(texte = "", liste = []) {
   const t = texte.toLowerCase();
-  return (reglages.preFiltreMotsCles || []).find((m) => t.includes(m.toLowerCase())) || null;
+  return (liste || []).find((m) => t.includes(m.toLowerCase())) || null;
 }
 
 // ---------- Appels IA ----------
@@ -86,14 +87,21 @@ async function evaluer(annonce) {
   return extraireJson(msg.content.map((c) => c.text || "").join("").trim());
 }
 
-// Rédaction de la proposition (modèle qualité), seulement pour les annonces retenues.
-async function redigerProposition(annonce, evaluation) {
+// Rédaction des DEUX messages client (modèle qualité), seulement pour les annonces retenues.
+async function redigerMessages(annonce, evaluation) {
   const msg = await anthropic.messages.create({
     model: reglages.modeleProposition,
-    max_tokens: 1200,
+    max_tokens: 1600,
+    system: "Tu réponds UNIQUEMENT avec un objet JSON valide {amorce, proposition_detaillee}. Pas de texte autour, pas de balises markdown.",
     messages: [{ role: "user", content: construirePromptProposition(annonce, evaluation) }],
   });
-  return msg.content.map((c) => c.text || "").join("").trim();
+  const texte = msg.content.map((c) => c.text || "").join("").trim();
+  try {
+    const j = extraireJson(texte);
+    return { amorce: j.amorce || "", detaillee: j.proposition_detaillee || "" };
+  } catch {
+    return { amorce: "", detaillee: texte };
+  }
 }
 
 // ---------- Mise en forme ----------
@@ -111,7 +119,9 @@ ${annonce.lien}
 LA DEMANDE : ${e.resume_demande || ""}
 Correspondance ${e.correspondance_profil}/10 · Charge ~${e.charge_estimee_jours} j · Budget ${annonce.budget || "—"} · Marché ${annonce.montantMoyenDevis || "—"} · Concurrence ${e.concurrence || "?"}
 À ÉCLAIRCIR : ${(e.questions_a_poser_au_client || []).join(" ; ") || "-"}
---- PROPOSITION DE RÉPONSE ---
+--- MESSAGE DE PREMIER CONTACT ---
+${e.amorce || ""}
+--- PROPOSITION DÉTAILLÉE ---
 ${e.brouillon_proposition || ""}
 --- MON AVIS --- (ça vaut le coup ? ${(e.vaut_le_coup || "?").toUpperCase()})
 ${e.compte_rendu || ""}
@@ -148,8 +158,10 @@ function blocAnnonceHTML({ annonce: a, res: e }) {
     ? `<div style="margin-top:12px;padding:10px 12px;background:#fef2f2;border-left:3px solid #dc2626;border-radius:4px;font-size:13px;color:#7f1d1d;"><strong>⚠ Points de vigilance :</strong> ${esc(e.red_flags.join(" · "))}</div>` : "";
   const questions = (e.questions_a_poser_au_client && e.questions_a_poser_au_client.length)
     ? labelSection("À éclaircir avec le client") + liste(e.questions_a_poser_au_client) : "";
+  const amorceBox = (e.amorce && e.amorce.trim())
+    ? labelSection("Message de premier contact (à envoyer)") + `<div style="padding:12px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:14px;color:#0f172a;line-height:1.6;white-space:pre-wrap;">${esc(e.amorce)}</div>` : "";
   const propo = (e.brouillon_proposition && e.brouillon_proposition.trim())
-    ? labelSection("Proposition de réponse (prête à envoyer)") + `<div style="padding:12px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;font-size:14px;color:#111827;line-height:1.6;white-space:pre-wrap;">${esc(e.brouillon_proposition)}</div>` : "";
+    ? labelSection("Proposition détaillée (si le client veut la technique)") + `<div style="padding:12px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;font-size:14px;color:#111827;line-height:1.6;white-space:pre-wrap;">${esc(e.brouillon_proposition)}</div>` : "";
   const difficultes = (e.difficultes && e.difficultes.length)
     ? `<div style="margin-top:8px;font-size:14px;color:#334155;"><strong>Difficultés :</strong> ${esc(e.difficultes.join(" · "))}</div>` : "";
 
@@ -164,6 +176,7 @@ function blocAnnonceHTML({ annonce: a, res: e }) {
       <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:14px;border-collapse:collapse;">${rows}</table>
       ${vigilance}
       ${questions}
+      ${amorceBox}
       ${propo}
       ${labelSection("Mon avis")}
       <div style="font-size:15px;font-weight:700;color:${cvaut};margin-bottom:4px;">Ça vaut le coup ? ${esc((e.vaut_le_coup || "?").toUpperCase())}</div>
@@ -215,11 +228,11 @@ async function envoyerRecap(sujet, texte, html) {
 function exemples() {
   const prio = [{
     annonce: { titre: "Développeur pour une app web de réservation sur-mesure", lien: "https://www.codeur.com/projects/000000-exemple", budget: "1 000 € à 10 000 €", montantMoyenDevis: "3 200 €", nbOffres: 6 },
-    res: { verdict: "À RÉPONDRE", vaut_le_coup: "oui", resume_demande: "Le client veut une application web de réservation de créneaux en temps réel pour ses salles, avec un back-office simple.", correspondance_profil: 8, complexite: "moyenne", charge_estimee_jours: 6, difficultes: ["créneaux concurrents en temps réel", "synchronisation multi-salles"], prix_estime_juste: "1 080 €", prix_marche: "3 200 €", ratio_prix_travail: "correct", concurrence: "faible", compte_rendu: "Projet pile dans mon cœur de cible, budget marché confortable et peu de concurrence. Charge dans ma limite. À traiter vite.", raison_courte: "Bon fit, bon marché", red_flags: ["hébergement non précisé"], questions_a_poser_au_client: ["L'hébergement est-il fourni ?", "Combien d'utilisateurs simultanés ?"], brouillon_proposition: "Bonjour,\n\nVotre projet de réservation en temps réel a retenu toute mon attention : la gestion de créneaux par salle est exactement le type de développement sur-mesure que j'affectionne. Je vous proposerais une base React + Node avec Supabase pour une synchronisation fiable même en accès simultanés. Développeur junior motivé et à jour sur les outils modernes, je m'investirais pour livrer un outil simple et robuste. J'estime le travail entre 5 et 7 jours, soit un ordre de grandeur de 900 à 1 400 € à affiner ensemble. Seriez-vous disponible cette semaine pour un court échange ?\n\nBien cordialement,\nDavid" },
+    res: { verdict: "À RÉPONDRE", vaut_le_coup: "oui", amorce: "Bonjour,\n\nVotre projet de site de réservation en temps réel m\u2019a tout de suite parlé : c\u2019est exactement le genre de développement sur-mesure que j\u2019aime réaliser. Je serais ravi d\u2019échanger avec vous pour bien cerner vos attentes, et je peux volontiers vous partager des exemples de projets similaires que j\u2019ai déjà menés si cela vous intéresse. Pour vous donner un premier ordre de grandeur, ce type de projet se situe autour de 900 à 1 400 €, à affiner ensemble. Seriez-vous disponible pour un court échange cette semaine ?\n\nBien cordialement,\nDavid", resume_demande: "Le client veut une application web de réservation de créneaux en temps réel pour ses salles, avec un back-office simple.", correspondance_profil: 8, complexite: "moyenne", charge_estimee_jours: 6, difficultes: ["créneaux concurrents en temps réel", "synchronisation multi-salles"], prix_estime_juste: "1 080 €", prix_marche: "3 200 €", ratio_prix_travail: "correct", concurrence: "faible", compte_rendu: "Projet pile dans mon cœur de cible, budget marché confortable et peu de concurrence. Charge dans ma limite. À traiter vite.", raison_courte: "Bon fit, bon marché", red_flags: ["hébergement non précisé"], questions_a_poser_au_client: ["L'hébergement est-il fourni ?", "Combien d'utilisateurs simultanés ?"], brouillon_proposition: "Bonjour,\n\nVotre projet de réservation en temps réel a retenu toute mon attention : la gestion de créneaux par salle est exactement le type de développement sur-mesure que j'affectionne. Je vous proposerais une base React + Node avec Supabase pour une synchronisation fiable même en accès simultanés. Développeur junior motivé et à jour sur les outils modernes, je m'investirais pour livrer un outil simple et robuste. J'estime le travail entre 5 et 7 jours, soit un ordre de grandeur de 900 à 1 400 € à affiner ensemble. Seriez-vous disponible cette semaine pour un court échange ?\n\nBien cordialement,\nDavid" },
   }];
   const seco = [{
     annonce: { titre: "Intégration d'un paiement en ligne", lien: "https://www.codeur.com/projects/000001-exemple", budget: "Moins de 500 €", montantMoyenDevis: "1 900 €", nbOffres: 22 },
-    res: { verdict: "MOYEN", vaut_le_coup: "mitigé", resume_demande: "Ajouter un paiement en ligne à un site existant, plateforme non précisée.", correspondance_profil: 7, complexite: "moyenne", charge_estimee_jours: 4, difficultes: ["stack existante inconnue", "sécurité des paiements"], prix_estime_juste: "720 €", prix_marche: "1 900 €", ratio_prix_travail: "mauvais", concurrence: "forte", compte_rendu: "Faisable et dans mes cordes, mais budget très bas et 22 devis déjà envoyés. À poursuivre seulement si le budget peut monter.", raison_courte: "Budget bas, forte concurrence", red_flags: ["budget incohérent", "22 offres"], questions_a_poser_au_client: ["Site sur-mesure ou CMS ?", "Le budget est-il ferme ?"], brouillon_proposition: "Bonjour,\n\nL'ajout d'un paiement en ligne est tout à fait dans mes compétences. Pour vous proposer une solution fiable, pourriez-vous préciser sur quelle base votre site est développé ? Je m'appuierais sur une intégration éprouvée (Stripe) pour une mise en place propre et sécurisée. Selon le périmètre, je situe l'intervention autour de 3 à 5 jours, à ajuster ensemble. Souhaitez-vous en discuter ?\n\nBien cordialement,\nDavid" },
+    res: { verdict: "MOYEN", vaut_le_coup: "mitigé", amorce: "Bonjour,\n\nVotre besoin d\u2019ajout d\u2019un paiement en ligne a retenu mon attention et je serais heureux de vous aider. J\u2019aimerais d\u2019abord échanger avec vous pour comprendre votre site actuel et vos priorités, et je peux vous montrer des exemples de projets similaires si vous le souhaitez. À première vue, ce type d\u2019intervention représente un ordre de grandeur de 450 à 750 €, que nous préciserons ensemble. Souhaitez-vous en discuter rapidement ?\n\nBien cordialement,\nDavid", resume_demande: "Ajouter un paiement en ligne à un site existant, plateforme non précisée.", correspondance_profil: 7, complexite: "moyenne", charge_estimee_jours: 4, difficultes: ["stack existante inconnue", "sécurité des paiements"], prix_estime_juste: "720 €", prix_marche: "1 900 €", ratio_prix_travail: "mauvais", concurrence: "forte", compte_rendu: "Faisable et dans mes cordes, mais budget très bas et 22 devis déjà envoyés. À poursuivre seulement si le budget peut monter.", raison_courte: "Budget bas, forte concurrence", red_flags: ["budget incohérent", "22 offres"], questions_a_poser_au_client: ["Site sur-mesure ou CMS ?", "Le budget est-il ferme ?"], brouillon_proposition: "Bonjour,\n\nL'ajout d'un paiement en ligne est tout à fait dans mes compétences. Pour vous proposer une solution fiable, pourriez-vous préciser sur quelle base votre site est développé ? Je m'appuierais sur une intégration éprouvée (Stripe) pour une mise en place propre et sécurisée. Selon le périmètre, je situe l'intervention autour de 3 à 5 jours, à ajuster ensemble. Souhaitez-vous en discuter ?\n\nBien cordialement,\nDavid" },
   }];
   return { prio, seco };
 }
@@ -259,7 +272,7 @@ async function executerPassage() {
     const id = extraireId(it.link);
 
     // Pré-filtre gratuit (titre + catégories RSS), avant tout appel réseau/IA.
-    const mot = motBloquant((it.title || "") + " " + ((it.categories || []).join(" ")));
+    const mot = motDansListe((it.title || "") + " " + ((it.categories || []).join(" ")), reglages.preFiltreMotsCles);
     if (mot) {
       filtrees++;
       console.log(`- (pré-filtré: ${mot}) ${it.title}`);
@@ -291,17 +304,30 @@ async function executerPassage() {
       console.error(`  ~ Détail indisponible pour ${id} (${err.message}), éval sur l'extrait RSS.`);
     }
 
+    // Filet de sécurité : la description complète révèle-t-elle une techno hors périmètre
+    // (ex. WordPress annoncé dans le texte mais pas dans le titre) ? Si oui, on écarte sans IA.
+    const motDesc = motDansListe(`${annonce.description} ${annonce.profils || ""}`, reglages.motsExclusionDescription);
+    if (motDesc) {
+      filtrees++;
+      console.log(`- (exclu par description: ${motDesc}) ${annonce.titre}`);
+      if (!DRY) vus[id] = Date.now();
+      continue;
+    }
+
     try {
       const res = await evaluer(annonce);
       console.log(`- ${res.verdict} (${res.correspondance_profil}/10) — ${annonce.titre}`);
 
       const emailable = reglages.verdictsAlertes.includes(res.verdict) || reglages.verdictsSecondaires.includes(res.verdict);
+      res.amorce = "";
       res.brouillon_proposition = "";
       if (emailable && res.vaut_le_coup !== "non") {
         try {
-          res.brouillon_proposition = await redigerProposition(annonce, res);
+          const m = await redigerMessages(annonce, res);
+          res.amorce = m.amorce;
+          res.brouillon_proposition = m.detaillee;
         } catch (err) {
-          console.error(`  ! Proposition échouée pour ${id}: ${err.message}`);
+          console.error(`  ! Rédaction messages échouée pour ${id}: ${err.message}`);
         }
       }
 
@@ -331,6 +357,18 @@ async function executerPassage() {
 }
 
 async function main() {
+  if (DEBUG) {
+    const url = process.argv[process.argv.indexOf("--debug") + 1];
+    if (!url || !/^https?:\/\//.test(url)) {
+      console.error("Usage : node index.js --debug <url_complete_de_l_annonce>");
+      process.exit(1);
+    }
+    console.log("Récupération de :", url, "\n");
+    const d = await recupererDetail(url);
+    console.log(JSON.stringify(d, null, 2));
+    console.log("\n--- DESCRIPTION extraite (à comparer avec le site) ---\n" + (d.description || "(vide)"));
+    return;
+  }
   if (WATCH) {
     const intervalle = (reglages.intervalleSecondes || 90) * 1000;
     console.log(`Mode surveillance continue : toutes les ${reglages.intervalleSecondes || 90} s. Ctrl+C pour arrêter.`);

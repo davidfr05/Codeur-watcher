@@ -1,4 +1,4 @@
-// prompt.js — Deux prompts : évaluation (Haiku) et rédaction de la proposition (Sonnet).
+// prompt.js — Deux prompts : évaluation (Haiku) et rédaction des messages client (Sonnet).
 import { profil, reglages } from "./config.js";
 
 // ---------- PROMPT 1 : ÉVALUATION (modèle économique) ----------
@@ -84,10 +84,10 @@ PRODUIS UNIQUEMENT ce JSON valide et complet (pas de texte autour, pas de balise
 }`;
 }
 
-// ---------- PROMPT 2 : RÉDACTION DE LA PROPOSITION (modèle qualité) ----------
+// ---------- PROMPT 2 : RÉDACTION DES MESSAGES CLIENT (modèle qualité) ----------
 export function construirePromptProposition(annonce, evaluation) {
   return `RÔLE
-Tu es un excellent rédacteur commercial qui écrit, à MA place, une proposition à envoyer à un client sur codeur.com.
+Tu écris, à MA place, DEUX messages destinés à un client sur codeur.com.
 Je suis un développeur freelance JUNIOR. Voici mon profil :
 ${profil.presentation}
 - Technos : ${profil.technosMaitrisees}
@@ -105,18 +105,27 @@ MON ANALYSE (déjà faite)
 - Charge estimée : ${evaluation.charge_estimee_jours} jours
 - Prix estimé juste : ${evaluation.prix_estime_juste}
 
-CONSIGNES DE RÉDACTION
-- La proposition doit être PRÊTE À ENVOYER TELLE QUELLE, sans que j'aie à la relire ou la corriger.
-- Ton cordial et chaleureux, en VOUVOYANT le client. Termine par une invitation à échanger, puis signe par "${profil.prenom}".
-- Adapte le CONTENU et la LONGUEUR à ce que le client demande explicitement :
-  * s'il veut des exemples/références, présente HONNÊTEMENT mes types de projets (sites vitrines, e-commerce sur-mesure,
-    automatisations de workflows pour la santé, intégrations d'IA/LLM) SANS inventer de noms de clients, d'URL ou de chiffres ;
-  * s'il demande une méthode, un planning ou des précisions, réponds-y ;
-  * annonce simple -> reste concis ; annonce exigeante -> développe.
-- Montre que j'ai LU le besoin (reprends un détail concret de l'annonce).
-- Sois proactif : propose une approche technique claire et, si pertinent, une idée de valeur ou une amélioration.
-- Reste HONNÊTE : assume mon profil junior comme une force (motivé, à jour sur l'IA, tarif accessible), sans inventer d'expérience.
-- Inclus une FOURCHETTE INDICATIVE de prix et/ou de délai (cohérente avec mon TJM et la charge), présentée comme une estimation à affiner ensemble.
+LES DEUX MESSAGES À ÉCRIRE
 
-RÉPONDS UNIQUEMENT avec le texte de la proposition (pas de guillemets, pas de préambule, pas de balises). Les sauts de ligne sont autorisés.`;
+1) "amorce" — le message de PREMIER CONTACT (celui que j'enverrai en premier) :
+   - Court : 3 à 5 phrases. Chaleureux, humain, PEU ou PAS technique (le client veut d'abord un contact, la technique viendra après).
+   - Objectif : engager la conversation et donner envie de répondre.
+   - Montre que j'ai lu le besoin (reprends brièvement un détail concret de l'annonce).
+   - Propose de partager des exemples de projets similaires que j'ai déjà réalisés S'IL le souhaite
+     (types de projets seulement : sites vitrines, e-commerce sur-mesure, automatisations pour la santé, intégrations d'IA — SANS inventer de noms, d'URL ou de chiffres).
+   - Glisse une FOURCHETTE INDICATIVE LÉGÈRE de prix et/ou de délai (cohérente avec mon TJM ${profil.tarifJourPlancher}-${profil.tarifJourCible} €/jour et la charge), présentée comme un premier ordre de grandeur à affiner.
+   - Vouvoiement. Termine par une invitation à échanger, puis signe par "${profil.prenom}".
+
+2) "proposition_detaillee" — la proposition plus complète (à envoyer si le client veut entrer dans le concret) :
+   - Plus étoffée que l'amorce mais COURTE et ACCESSIBLE : explique l'approche en langage clair, SANS jargon technique lourd
+     (un client non-développeur doit comprendre). Va à l'essentiel.
+   - Montre ma compréhension du besoin, propose une approche simple, et si pertinent une idée de valeur.
+   - Reste HONNÊTE : assume mon profil junior comme une force (motivé, à jour sur l'IA, tarif accessible), sans inventer d'expérience.
+   - Reprends la fourchette de prix/délai comme estimation à affiner ensemble. Vouvoiement, signe par "${profil.prenom}".
+
+PRODUIS UNIQUEMENT ce JSON valide (pas de texte autour, pas de balises markdown). Les sauts de ligne dans les valeurs sont autorisés :
+{
+  "amorce": "le message de premier contact",
+  "proposition_detaillee": "la proposition plus détaillée mais accessible"
+}`;
 }
