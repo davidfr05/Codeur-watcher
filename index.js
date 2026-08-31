@@ -224,6 +224,47 @@ async function envoyerRecap(sujet, texte, html) {
   await transporteur().sendMail({ from: process.env.SMTP_USER, to: process.env.NOTIFY_TO, subject: sujet, text: texte, html });
 }
 
+// ---------- Telegram (même contenu que l'email, un message par annonce retenue) ----------
+async function envoyerTelegram(texte) {
+  const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: process.env.TELEGRAM_CHAT_ID,
+      text: texte,
+      parse_mode: "HTML",
+      disable_web_page_preview: false,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(`Telegram HTTP ${res.status} ${err}`);
+  }
+}
+function blocAnnonceTelegram({ annonce: a, res: e }) {
+  const lignes = [
+    `<b>[${esc(e.verdict)}]</b> <a href="${esc(a.lien)}">${esc(a.titre)}</a>`,
+    "",
+    esc(e.resume_demande || ""),
+    "",
+    `Correspondance ${esc(e.correspondance_profil)}/10 · Charge ~${esc(e.charge_estimee_jours)} j · Budget ${esc(a.budget || "—")} · Marché ${esc(a.montantMoyenDevis || e.prix_marche || "—")} · Concurrence ${esc(e.concurrence || "?")}`,
+    "",
+    `<b>Ça vaut le coup ? ${esc((e.vaut_le_coup || "?").toUpperCase())}</b> — ${esc(e.compte_rendu || e.raison_courte || "")}`,
+  ];
+  if (e.amorce && e.amorce.trim()) lignes.push("", "<b>Message de premier contact :</b>", esc(e.amorce));
+  return lignes.join("\n");
+}
+async function envoyerTelegramPourAnnonces(items) {
+  for (const item of items) {
+    try {
+      await envoyerTelegram(blocAnnonceTelegram(item));
+    } catch (err) {
+      console.error(`  ! Erreur Telegram pour ${item.annonce.id ?? item.annonce.titre}: ${err.message}`);
+    }
+  }
+}
+
 // ---------- Exemple pour --test-mail ----------
 function exemples() {
   const prio = [{
@@ -247,7 +288,12 @@ async function executerPassage() {
     const sujet = "[Codeur] EMAIL DE TEST — 1 prioritaire, 1 à regarder";
     const html = corpsRecapHTML(prio, seco);
     if (DRY) { fs.writeFileSync("apercu-email.html", html); console.log("Aperçu écrit dans apercu-email.html."); }
-    else { await envoyerRecap(sujet, corpsRecapTexte(prio, seco), html); console.log("Email de test envoyé à " + process.env.NOTIFY_TO + "."); }
+    else {
+      await envoyerRecap(sujet, corpsRecapTexte(prio, seco), html);
+      console.log("Email de test envoyé à " + process.env.NOTIFY_TO + ".");
+      await envoyerTelegramPourAnnonces([...prio, ...seco]);
+      console.log("Message(s) Telegram de test envoyé(s).");
+    }
     return;
   }
 
@@ -347,7 +393,12 @@ async function executerPassage() {
     const sujet = `[Codeur] ${prioritaires.length} prioritaire(s), ${secondaires.length} à regarder`;
     const html = corpsRecapHTML(prioritaires, secondaires);
     if (DRY) { fs.writeFileSync("apercu-email.html", html); console.log(`\n${total} mission(s) retenue(s). Aperçu écrit dans apercu-email.html.`); }
-    else { await envoyerRecap(sujet, corpsRecapTexte(prioritaires, secondaires), html); console.log(`Email récap envoyé (${total} mission(s)).`); }
+    else {
+      await envoyerRecap(sujet, corpsRecapTexte(prioritaires, secondaires), html);
+      console.log(`Email récap envoyé (${total} mission(s)).`);
+      await envoyerTelegramPourAnnonces([...prioritaires, ...secondaires]);
+      console.log(`Message(s) Telegram envoyé(s) (${total}).`);
+    }
   } else {
     console.log("Aucune mission intéressante ce passage — pas d'email.");
   }
